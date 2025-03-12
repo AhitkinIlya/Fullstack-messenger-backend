@@ -27,9 +27,29 @@ services:
         networks:
             - backend
 
+#     redisinsight:
+#         image: redislabs/redisinsight:latest
+#         container_name: redisinsight
+#         ports:
+#           - 8001:8001
+#         volumes:
+#           - redisinsight_data:/db
+#         depends_on:
+#           - redis
+#         environment:
+#           - REDIS_HOST=redis  # Имя Redis-сервиса из docker-compose
+#           - REDIS_PORT=6379
+#           # Раскомментируйте если Redis требует пароль:
+#           - REDIS_PASSWORD=${REDIS_PASSWORD}
+#           - DISABLE_TELEMETRY=1  # Отключает Telemetry
+#           - RI_APP_PORT=8001     # Явно задает порт для веб-интерфейса
+#         networks:
+#           - backend
+
 volumes:
     postgres_data:
     redis_data:
+#     redisinsight_data:
 
 networks:
     backend:

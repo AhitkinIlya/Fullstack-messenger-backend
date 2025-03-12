@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 
+import { AccountModule } from '@/src/modules/account/account.module'
+import { AuthModule } from '@/src/modules/auth/auth.module'
+import { SessionModule } from '@/src/modules/session/session.module'
 import { IS_DEV_ENV } from '@/src/shared/utils/is-dev.util'
 
 import { PrismaModule } from './prisma/prisma.module'
@@ -13,7 +16,10 @@ import { RedisModule } from './redis/redis.module'
 			ignoreEnvFile: !IS_DEV_ENV
 		}),
 		PrismaModule,
-		RedisModule
+		RedisModule,
+		AuthModule,
+		AccountModule,
+		SessionModule
 	]
 })
 export class CoreModule {}
