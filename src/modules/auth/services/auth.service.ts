@@ -4,20 +4,25 @@ import {
 	NotFoundException,
 	UnauthorizedException
 } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { Request } from 'express'
+import { IResult } from 'ua-parser-js'
 
 import { PrismaService } from '@/src/core/prisma/prisma.service'
 import { LoginDto } from '@/src/modules/auth/dto/login.dto'
 import { RegisterDto } from '@/src/modules/auth/dto/register.dto'
 import { PasswordService } from '@/src/modules/auth/services/password.service'
-import { SessionService } from '@/src/modules/session/session.service'
+import { VerificationService } from '@/src/modules/verification/services/verification.service'
+import { getSessionMetadata } from '@/src/shared/utils/session-metadata.util'
+import { destroySession, saveSession } from '@/src/shared/utils/session.util'
 
 @Injectable()
 export class AuthService {
 	public constructor(
 		private readonly prismaService: PrismaService,
 		private readonly passwordService: PasswordService,
-		private readonly sessionService: SessionService
+		private readonly configService: ConfigService,
+		private readonly verificationService: VerificationService
 	) {}
 
 	public async register(dto: RegisterDto) {
@@ -49,7 +54,7 @@ export class AuthService {
 
 		const hashedPassword = await this.passwordService.hashPassword(password)
 
-		return this.prismaService.user.create({
+		const user = await this.prismaService.user.create({
 			data: {
 				email,
 				password: hashedPassword,
@@ -57,9 +62,13 @@ export class AuthService {
 				username
 			}
 		})
+
+		await this.verificationService.sendVerificationToken(user)
+
+		return true
 	}
 
-	async login(req: Request, dto: LoginDto) {
+	async login(req: Request, dto: LoginDto, userAgent: IResult) {
 		const { login, password } = dto
 
 		const user = await this.prismaService.user.findFirst({
@@ -84,10 +93,34 @@ export class AuthService {
 			throw new UnauthorizedException('Неверный пароль')
 		}
 
-		return this.sessionService.saveSession(req, user)
+		if (!user.isEmailVerified) {
+			const resendAvailabilityStatus =
+				await this.verificationService.checkVerificationResendAvailability(
+					user
+				)
+
+			if (resendAvailabilityStatus.isNeedResendVerification) {
+				await this.verificationService.sendVerificationToken(user)
+
+				throw new UnauthorizedException({
+					message:
+						'Аккаунт не верифицирован. Письмо для завершения регистрации повторно отправлено Вам на email'
+				})
+			}
+
+			throw new UnauthorizedException({
+				message:
+					'Аккаунт не верифицирован. Письмо для завершения регистрации ранее было отправлено Вам на email',
+				retryAfter: resendAvailabilityStatus.remainingCooldown
+			})
+		}
+
+		const metadata = getSessionMetadata(req, userAgent)
+
+		return saveSession(req, user, metadata)
 	}
 
 	async logout(req: Request) {
-		return this.sessionService.destroySession(req)
+		return destroySession(req, this.configService)
 	}
 }
